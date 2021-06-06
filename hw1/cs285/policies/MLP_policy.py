@@ -74,6 +74,8 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
 
     ##################################
 
+
+
     def get_action(self, obs: np.ndarray) -> np.ndarray:
         if len(obs.shape) > 1:
             observation = obs
@@ -81,11 +83,18 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             observation = obs[None]
 
         # TODO return the action that the policy prescribes
-        raise NotImplementedError
+        # Querying the policy for experience, do not need autodiff
+        with torch.no_grad():
+            action = self.forward(observation).sample()         
+
+        return action
+
 
     # update/train this policy
     def update(self, observations, actions, **kwargs):
         raise NotImplementedError
+
+
 
     # This function defines the forward pass of the network.
     # You can return anything you want, but you should be able to differentiate
@@ -93,10 +102,22 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     # return more flexible objects, such as a
     # `torch.distributions.Distribution` object. It's up to you!
     def forward(self, observation: torch.FloatTensor) -> Any:
-        raise NotImplementedError
+        
+        if self.discrete:
+            pi = distributions.Categorical(logits=self.logits_na(observation))
+
+        else: 
+            mu = self.mean_net(observation)
+            std = torch.exp(self.logstd)
+            pi = distributions.Normal(mu, std)
+
+        return pi
 
 
-#####################################################
+
+
+
+#####################################################s
 #####################################################
 
 class MLPPolicySL(MLPPolicy):
@@ -104,13 +125,26 @@ class MLPPolicySL(MLPPolicy):
         super().__init__(ac_dim, ob_dim, n_layers, size, **kwargs)
         self.loss = nn.MSELoss()
 
-    def update(
-            self, observations, actions,
-            adv_n=None, acs_labels_na=None, qvals=None
-    ):
+
+    def update(self, observations, actions, dv_n=None, acs_labels_na=None, qvals=None):
+        
+        
         # TODO: update the policy and return the loss
-        loss = TODO
+        
+        a_policy = None
+        a_expert = None
+
+
+
+        loss = self.loss(a_policy, a_expert)
+
+
+
+
+
+
         return {
+            
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
         }
