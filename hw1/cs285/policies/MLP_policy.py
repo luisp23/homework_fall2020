@@ -62,10 +62,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                 torch.zeros(self.ac_dim, dtype=torch.float32, device=ptu.device)
             )
             self.logstd.to(ptu.device)
-            self.optimizer = optim.Adam(
-                itertools.chain([self.logstd], self.mean_net.parameters()),
-                self.learning_rate
-            )
+            self.optimizer = optim.Adam(itertools.chain([self.logstd], self.mean_net.parameters()), self.learning_rate)
 
     ##################################
 
@@ -73,7 +70,6 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         torch.save(self.state_dict(), filepath)
 
     ##################################
-
 
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
@@ -85,15 +81,14 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # TODO return the action that the policy prescribes
         # Querying the policy for experience, do not need autodiff
         with torch.no_grad():
-            action = self.forward(observation).sample()         
+            action = self(ptu.from_numpy(observation)).sample()         
 
-        return action
+        return ptu.to_numpy(action)
 
 
     # update/train this policy
     def update(self, observations, actions, **kwargs):
         raise NotImplementedError
-
 
 
     # This function defines the forward pass of the network.
@@ -104,7 +99,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     def forward(self, observation: torch.FloatTensor) -> Any:
         
         if self.discrete:
-            pi = distributions.Categorical(logits=self.logits_na(observation))
+            pi = distributions.Categorical(logits=self.logits_na(ptu.from_numpy(observation)))
 
         else: 
             mu = self.mean_net(observation)
@@ -112,9 +107,6 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             pi = distributions.Normal(mu, std)
 
         return pi
-
-
-
 
 
 #####################################################s
@@ -128,23 +120,16 @@ class MLPPolicySL(MLPPolicy):
 
     def update(self, observations, actions, dv_n=None, acs_labels_na=None, qvals=None):
         
-        
         # TODO: update the policy and return the loss
-        
-        a_policy = None
-        a_expert = None
+        self.optimizer.zero_grad()
+        actions_policy = self(ptu.from_numpy(observations)).sample()
+        actions_expert = ptu.from_numpy(actions)
 
-
-
-        loss = self.loss(a_policy, a_expert)
-
-
-
-
-
+        loss = self.loss(actions_policy, actions_expert)
+        loss.backward()
+        self.optimizer.step()
 
         return {
-            
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
         }
