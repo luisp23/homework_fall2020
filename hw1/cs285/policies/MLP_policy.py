@@ -81,7 +81,7 @@ class MLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # TODO return the action that the policy prescribes
         # Querying the policy for experience, do not need autodiff
         with torch.no_grad():
-            action = self(ptu.from_numpy(observation)).sample()         
+            action = self(ptu.from_numpy(observation)).rsample() 
 
         return ptu.to_numpy(action)
 
@@ -122,7 +122,9 @@ class MLPPolicySL(MLPPolicy):
         
         # TODO: update the policy and return the loss
         self.optimizer.zero_grad()
-        actions_policy = self(ptu.from_numpy(observations)).sample()
+
+        # return policy's distribution and resample in order to backpropagate gradients
+        actions_policy = self(ptu.from_numpy(observations)).rsample()
         actions_expert = ptu.from_numpy(actions)
 
         loss = self.loss(actions_policy, actions_expert)
